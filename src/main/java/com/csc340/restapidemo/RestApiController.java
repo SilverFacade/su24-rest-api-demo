@@ -5,8 +5,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -14,7 +17,7 @@ import java.util.logging.Logger;
 @RestController
 public class RestApiController {
 
-    Map<Integer, Student> studentDatabase = new HashMap<>();
+    Map<Integer, Student> studentDatabase = StudentFileHandler.readFromFile();
 
     /**
      * Hello World API endpoint.
@@ -47,6 +50,7 @@ public class RestApiController {
     public Object getAllStudents() {
         if (studentDatabase.isEmpty()) {
             studentDatabase.put(1, new Student(1, "sample1", "csc", 3.86));
+            StudentFileHandler.writeToFile(studentDatabase);
         }
         return studentDatabase.values();
     }
@@ -72,7 +76,29 @@ public class RestApiController {
     @PostMapping("students/create")
     public Object createStudent(@RequestBody Student student) {
         studentDatabase.put(student.getId(), student);
+        StudentFileHandler.writeToFile(studentDatabase);
         return studentDatabase.values();
+    }
+
+    /**
+     * * Update an existing Student entry.
+     *
+     * @param id the id of the student to be updated
+     * @return the updated Student
+     */
+    @PutMapping("students/update/{id}")
+    public Student updateStudent(@PathVariable int id, @RequestBody Student updatedStudent) {
+        Student existingStudent = studentDatabase.get(id);
+        if (existingStudent != null) {
+            existingStudent.setName(updatedStudent.getName());
+            existingStudent.setMajor(updatedStudent.getMajor());
+            existingStudent.setGpa(updatedStudent.getGpa());
+            StudentFileHandler.writeToFile(studentDatabase);
+            return existingStudent;
+        }
+        else {
+            return studentDatabase.values().iterator().next();
+        }
     }
 
     /**
@@ -84,6 +110,7 @@ public class RestApiController {
     @DeleteMapping("students/delete/{id}")
     public Object deleteStudent(@PathVariable int id) {
         studentDatabase.remove(id);
+        StudentFileHandler.writeToFile(studentDatabase);
         return studentDatabase.values();
     }
 
@@ -150,4 +177,38 @@ public class RestApiController {
         }
 
     }
+
+    /**
+     * get bird observation data from anywhere in the world
+     * @param lat the latitude of the destination
+     * @param lng the longitude of the destination
+     * @return Object type
+     */
+    @GetMapping("/ebird")
+    public Object getRecentBirdObservations(@RequestParam double lat, @RequestParam double lng) {
+        try {
+            String apiKey = "x-ebirdapitoken";
+            String url = "https://api.ebird.org/v2/data/obs/geo/recent?lat=" + lat + "&lng=" + lng;
+
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-eBirdApiToken", apiKey);
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+
+            // Print the response to the system output
+            System.out.println(response.getBody());
+
+            // Parse the JSON response and return it
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(response.getBody());
+
+            return root;
+        } catch (Exception e) {
+            System.out.println("Error fetching bird observations: " + e.getMessage());
+            return "Error: " + e.getMessage();
+        }
+    }
+
 }
